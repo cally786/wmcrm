@@ -63,6 +63,12 @@
     "vaul": "^0.9.9",
     "zod": "3.25.67"
   },
+  "overrides": {
+    "vaul": {
+      "react": "^19",
+      "react-dom": "^19"
+    }
+  },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.9",
     "@types/node": "^22",
