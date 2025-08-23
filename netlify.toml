@@ -1,0 +1,16 @@
+[build]
+  publish = ".next"
+  command = "npm run build"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[build.environment]
+  NEXT_TELEMETRY_DISABLED = "1"
+  
+# Para Next.js con App Router
+[functions]
+  external_node_modules = ["@supabase/supabase-js"]
+  node_bundler = "esbuild"
