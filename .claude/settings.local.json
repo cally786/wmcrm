@@ -6,7 +6,9 @@
       "mcp__supabase__execute_sql",
       "WebSearch",
       "WebFetch(domain:docs.wompi.co)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "Bash(npx vercel:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

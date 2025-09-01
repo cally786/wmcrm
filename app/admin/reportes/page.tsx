@@ -216,7 +216,7 @@ export default function ReportesAdminPage() {
       )
 
       // Process region data from bars
-      const regionCounts = {}
+      const regionCounts: Record<string, number> = {}
       barsData?.forEach(bar => {
         if (bar.location && typeof bar.location === 'object' && bar.location.city) {
           const city = bar.location.city
