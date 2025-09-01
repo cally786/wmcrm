@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
       message: 'Link de pago generado exitosamente'
     })
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('💥 Error creating payment link:', error)
     console.error('💥 Error details:', {
       name: error?.name,
