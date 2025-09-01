@@ -67,7 +67,37 @@ export default function LoginPage() {
 
       if (data.user) {
         console.log('✅ Login exitoso:', { user_id: data.user.id, email: data.user.email })
-        router.push("/comercial/dashboard")
+        
+        try {
+          // Verificar si es admin consultando la base de datos
+          const { data: roleData } = await supabase
+            .from('crm_roles')
+            .select('role')
+            .eq('user_id', data.user.id)
+            .eq('activo', true)
+            .single()
+          
+          const isAdmin = roleData?.role === 'admin' || formData.email === 'admin@wingman.com' || formData.email.includes('admin')
+          
+          if (isAdmin) {
+            console.log('🔐 Redirigiendo a admin dashboard')
+            router.push("/admin/dashboard")
+          } else {
+            console.log('👤 Redirigiendo a comercial dashboard')
+            router.push("/comercial/dashboard")
+          }
+        } catch (roleError) {
+          console.log('⚠️ No se pudo verificar rol, usando email como fallback')
+          // Fallback: usar email para determinar rol
+          const isAdmin = formData.email === 'admin@wingman.com' || formData.email.includes('admin')
+          
+          if (isAdmin) {
+            router.push("/admin/dashboard")
+          } else {
+            router.push("/comercial/dashboard")
+          }
+        }
+        
         router.refresh() // Forzar refresh para actualizar datos
       } else {
         setErrors({ general: "No se pudo autenticar" })

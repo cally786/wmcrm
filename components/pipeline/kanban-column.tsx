@@ -14,14 +14,17 @@ interface KanbanColumnProps {
   children: React.ReactNode
   onDrop: (columnId: string) => void
   isDragOver: boolean
+  isDropDisabled?: boolean
 }
 
-export function KanbanColumn({ id, title, badgeColor, count, children, onDrop, isDragOver }: KanbanColumnProps) {
+export function KanbanColumn({ id, title, badgeColor, count, children, onDrop, isDragOver, isDropDisabled = false }: KanbanColumnProps) {
   const [dragOver, setDragOver] = useState(false)
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
-    setDragOver(true)
+    if (!isDropDisabled) {
+      setDragOver(true)
+    }
   }
 
   const handleDragLeave = (e: React.DragEvent) => {
@@ -32,14 +35,18 @@ export function KanbanColumn({ id, title, badgeColor, count, children, onDrop, i
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setDragOver(false)
-    onDrop(id)
+    if (!isDropDisabled) {
+      onDrop(id)
+    }
   }
 
   return (
     <div
       className={cn(
         "flex flex-col w-80 h-full bg-card/50 rounded-lg border border-border/50 transition-wingman",
-        dragOver && isDragOver && "ring-2 ring-primary/50 bg-primary/5",
+        dragOver && isDragOver && !isDropDisabled && "ring-2 ring-primary/50 bg-primary/5",
+        isDropDisabled && "opacity-60 cursor-not-allowed",
+        isDropDisabled && dragOver && "ring-2 ring-destructive/50 bg-destructive/5",
       )}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}

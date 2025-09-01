@@ -347,7 +347,169 @@ export function CommercialPayouts() {
                     <span className="text-sm text-muted-foreground">
                       Pagado el {new Date(payout.paymentDate).toLocaleDateString("es-ES")}
                     </span>
-                    <Button size="sm" variant="outline">
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={(e) => {
+                        e.stopPropagation() // Prevent modal from opening
+                        
+                        // Generate PDF-style receipt using print window
+                        const printWindow = window.open('', '_blank', 'width=600,height=800')
+                        
+                        if (!printWindow) {
+                          alert('Por favor permite ventanas emergentes para descargar el comprobante')
+                          return
+                        }
+
+                        const receiptContent = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Comprobante de Pago - ${formatPeriod(payout.period)}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Courier New', monospace;
+            line-height: 1.4;
+            color: #333;
+            padding: 30px;
+            background: white;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .receipt-header {
+            text-align: center;
+            border: 2px solid #333;
+            padding: 20px;
+            margin-bottom: 25px;
+            background: #f8f9fa;
+        }
+        .receipt-header h1 {
+            font-size: 18px;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+        .receipt-header p {
+            font-size: 12px;
+            color: #666;
+        }
+        .receipt-body {
+            border: 1px solid #333;
+            padding: 20px;
+        }
+        .receipt-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px dotted #ccc;
+        }
+        .receipt-row:last-child {
+            border-bottom: none;
+            font-weight: bold;
+            font-size: 16px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 2px solid #333;
+        }
+        .label {
+            font-weight: bold;
+        }
+        .value {
+            text-align: right;
+        }
+        .receipt-footer {
+            text-align: center;
+            margin-top: 25px;
+            padding-top: 15px;
+            border-top: 1px solid #ccc;
+            font-size: 11px;
+            color: #666;
+        }
+        .stamp {
+            text-align: center;
+            margin: 20px 0;
+            padding: 15px;
+            border: 3px double #333;
+            background: #f0f8f0;
+        }
+        .stamp .status {
+            font-size: 20px;
+            font-weight: bold;
+            color: #28a745;
+        }
+        @media print {
+            body { padding: 15px; }
+            .no-print { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="receipt-header">
+        <h1>COMPROBANTE DE PAGO</h1>
+        <p>WINGMAN CRM - SISTEMA DE COMISIONES</p>
+        <p>Documento Oficial de Pago</p>
+    </div>
+
+    <div class="receipt-body">
+        <div class="receipt-row">
+            <span class="label">COMERCIAL:</span>
+            <span class="value">Test User Nuevo</span>
+        </div>
+        <div class="receipt-row">
+            <span class="label">PERÍODO:</span>
+            <span class="value">${formatPeriod(payout.period)}</span>
+        </div>
+        <div class="receipt-row">
+            <span class="label">FECHA DE PAGO:</span>
+            <span class="value">${new Date(payout.paymentDate).toLocaleDateString('es-ES')}</span>
+        </div>
+        <div class="receipt-row">
+            <span class="label">REFERENCIA:</span>
+            <span class="value">WM-${payout.id.toUpperCase()}-${Date.now().toString().slice(-6)}</span>
+        </div>
+        <div class="receipt-row">
+            <span class="label">MÉTODO DE PAGO:</span>
+            <span class="value">Transferencia Bancaria</span>
+        </div>
+        <div class="receipt-row">
+            <span class="label">MONTO PAGADO:</span>
+            <span class="value">$${payout.netAmount.toLocaleString()} COP</span>
+        </div>
+    </div>
+
+    <div class="stamp">
+        <div class="status">✓ PAGADO</div>
+        <p>Transacción Completada Exitosamente</p>
+    </div>
+
+    <div class="receipt-footer">
+        <p><strong>Documento generado automáticamente</strong></p>
+        <p>Fecha de emisión: ${new Date().toLocaleDateString('es-ES')} - ${new Date().toLocaleTimeString('es-ES')}</p>
+        <p>© ${new Date().getFullYear()} Wingman CRM. Todos los derechos reservados.</p>
+        <p>Este comprobante es válido como prueba de pago oficial</p>
+    </div>
+
+    <div class="no-print" style="position: fixed; top: 10px; right: 10px; z-index: 1000;">
+        <button onclick="window.print()" style="background: #28a745; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; margin-right: 5px; font-size: 12px;">
+            💾 Descargar PDF
+        </button>
+        <button onclick="window.close()" style="background: #666; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+            ✕ Cerrar
+        </button>
+    </div>
+</body>
+</html>
+                        `
+
+                        printWindow.document.write(receiptContent)
+                        printWindow.document.close()
+                        
+                        setTimeout(() => {
+                          printWindow.focus()
+                        }, 500)
+                      }}
+                    >
                       <Download className="h-4 w-4 mr-2" />
                       Comprobante
                     </Button>

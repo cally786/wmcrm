@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "supabase": {
+      "command": "npx",
+      "args": ["-y", "@supabase/mcp-server-supabase@latest"],
+      "env": {
+        "SUPABASE_ACCESS_TOKEN": "sbp_873d61ab684bc909275854f911f2bdf1f87de0a4",
+        "SUPABASE_PROJECT_REF": "xtmugnmclsuqutenfyav"
+      }
+    },
+    "browsermcp": {
+      "command": "npx",
+      "args": ["@browsermcp/mcp@latest"]
+    },
+    "windows-logs": {
+      "command": "node",
+      "args": ["C:\\Users\\ASUS\\Documents\\Proyectos\\mcp\\windows-logs-mcp.js"],
+      "env": {}
+    }
+  }
+}

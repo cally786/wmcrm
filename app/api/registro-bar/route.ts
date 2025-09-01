@@ -28,47 +28,101 @@ export async function POST(request: NextRequest) {
 
     console.log('📝 Registrando nuevo bar:', { nombreBar, ciudad, metodo })
 
-    // Get current user from Supabase auth
-    const { data: { user } } = await supabase.auth.getUser()
+    // Get Authorization header from request
+    const authHeader = request.headers.get('authorization')
     let comercialId = null
     
-    if (user) {
-      // Find comercial by user_id in crm_roles or by email
-      const { data: roleData } = await supabase
-        .from('crm_roles')
-        .select('comercial_id')
-        .eq('user_id', user.id)
-        .eq('activo', true)
-        .single()
-
-      comercialId = roleData?.comercial_id
-      
-      if (!comercialId) {
-        const { data: comercialData } = await supabase
-          .from('comercial')
-          .select('id')
-          .eq('email', user.email)
-          .single()
+    console.log('🔍 Auth header present:', !!authHeader)
+    
+    if (authHeader) {
+      try {
+        // Create a new supabase client with the user's session
+        const token = authHeader.replace('Bearer ', '')
+        const supabaseWithAuth = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          {
+            global: {
+              headers: {
+                Authorization: authHeader,
+              },
+            },
+          }
+        )
         
-        comercialId = comercialData?.id
+        const { data: { user }, error } = await supabaseWithAuth.auth.getUser()
+        
+        if (user && !error) {
+          console.log('✅ Found authenticated user:', { userId: user.id, email: user.email })
+          
+          // Find comercial by user_id in crm_roles
+          const { data: roleData } = await supabase
+            .from('crm_roles')
+            .select('comercial_id')
+            .eq('user_id', user.id)
+            .eq('activo', true)
+            .single()
+
+          comercialId = roleData?.comercial_id
+          console.log('🔍 Role data found:', { roleData, comercialId })
+          
+          if (!comercialId) {
+            // Try to find comercial by email
+            const { data: comercialData } = await supabase
+              .from('comercial')
+              .select('id')
+              .eq('email', user.email)
+              .single()
+            
+            comercialId = comercialData?.id
+            console.log('🔍 Comercial by email:', { comercialData, comercialId })
+          }
+        } else {
+          console.log('⚠️ Auth error or no user:', error)
+        }
+      } catch (authError) {
+        console.error('❌ Error getting user from token:', authError)
       }
     } else {
-      // No user authenticated - use Test User Nuevo
-      const { data: demoComercial } = await supabase
-        .from('comercial')
-        .select('id')
-        .eq('email', 'testnuevo@demo.com')
-        .single()
-      
-      comercialId = demoComercial?.id
+      console.log('⚠️ No authorization header found')
     }
-
+    
     if (!comercialId) {
       console.error('❌ No comercial found for bar registration')
       return NextResponse.json({ error: 'Comercial no encontrado' }, { status: 400 })
     }
 
     console.log('✅ Using comercial:', comercialId)
+
+    // Validate NIT doesn't already exist (check base numbers only)
+    if (nit) {
+      const baseNit = nit.split('-')[0].trim()
+      
+      const { data: existingBars, error: nitCheckError } = await supabase
+        .from('bars')
+        .select('id, name, contacto_nombre, nit')
+        .not('nit', 'is', null)
+
+      if (nitCheckError) {
+        console.error('❌ Error checking NITs:', nitCheckError)
+        return NextResponse.json({ error: 'Error verificando NIT' }, { status: 400 })
+      }
+
+      // Find matching base NIT
+      const matchingBar = existingBars?.find(bar => {
+        if (!bar.nit) return false
+        const existingBaseNit = bar.nit.split('-')[0].trim()
+        return existingBaseNit === baseNit
+      })
+
+      if (matchingBar) {
+        console.log('❌ Base NIT already exists:', { inputNit: nit, baseNit, existingNit: matchingBar.nit, barName: matchingBar.name })
+        return NextResponse.json({ 
+          error: `El NIT base ${baseNit} ya está registrado en la plataforma para el bar "${matchingBar.name}" (NIT completo: ${matchingBar.nit}). ${matchingBar.contacto_nombre ? `Contacto: ${matchingBar.contacto_nombre}.` : ''} Si crees que esto es un error, contacta al soporte.`,
+          errorType: 'DUPLICATE_NIT'
+        }, { status: 400 })
+      }
+    }
 
     // 1. Create the bar
     const barData = {
@@ -109,8 +163,8 @@ export async function POST(request: NextRequest) {
       ciudad: ciudad,
       nota: `Bar registrado desde formulario frontend. ${metodo === 'evento' ? `Evento: ${tipoEvento || 'Sin especificar'}, Aforo: ${aforoEstimado || 'Sin especificar'}` : 'Método estándar'}.`,
       owner_id: comercialId,
-      etapa: 'PROSPECTO',
-      score: 75,
+      etapa: metodo === 'evento' && fechaEvento ? 'DEMO_PROG' : 'PROSPECTO',
+      score: metodo === 'evento' && fechaEvento ? 85 : 75,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }

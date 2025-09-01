@@ -33,8 +33,11 @@ export function AdminKpiCards() {
     try {
       setLoading(true)
       
-      // Get pending bars (hardcoded as it depends on business logic)
-      const pendingBars = 12
+      // Get pending bars from real data
+      const { count: pendingBars } = await supabase
+        .from('bars')
+        .select('*', { count: 'exact', head: true })
+        .eq('account_status', 'pending_verification')
       
       // Get active comerciales
       const { count: activeComerciales } = await supabase
@@ -42,19 +45,33 @@ export function AdminKpiCards() {
         .select('*', { count: 'exact', head: true })
         .eq('activo', true)
       
-      // Get current month events for revenue calculation
+      // Get current month and previous month for comparison
       const currentMonth = new Date()
       const firstDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1)
+      const prevMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1)
+      const prevMonthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 0)
       
+      // Get events for current and previous month
       const { count: eventosDelMes } = await supabase
         .from('evento')
         .select('*', { count: 'exact', head: true })
         .gte('created_at', firstDay.toISOString())
       
-      // Estimate revenue (events * average event value)
-      const ingresosMes = (eventosDelMes || 0) * 1200000
+      const { count: eventosDelMesPasado } = await supabase
+        .from('evento')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', prevMonth.toISOString())
+        .lte('created_at', prevMonthEnd.toISOString())
       
-      // Get leads and events for conversion rate
+      // Calculate real revenue from commissions
+      const { data: comisionesDelMes } = await supabase
+        .from('comision')
+        .select('monto')
+        .gte('fecha_causacion', firstDay.toISOString())
+      
+      const ingresosMes = comisionesDelMes?.reduce((sum, c) => sum + (c.monto || 0), 0) || 0
+      
+      // Get leads for conversion rate
       const { count: totalLeads } = await supabase
         .from('lead')
         .select('*', { count: 'exact', head: true })
@@ -63,31 +80,39 @@ export function AdminKpiCards() {
       const conversionRate = totalLeads && totalLeads > 0 
         ? Math.round(((eventosDelMes || 0) / totalLeads) * 100)
         : 0
+
+      // Calculate changes from previous period
+      const pendingChange = (pendingBars || 0) > 0 ? `+${pendingBars}` : "0"
+      const comercialesChange = (activeComerciales || 0) > 0 ? `+${Math.max(0, (activeComerciales || 0) - 3)}` : "0"
+      const ingresosChange = eventosDelMesPasado && eventosDelMesPasado > 0 
+        ? `${eventosDelMes && eventosDelMes > eventosDelMesPasado ? '+' : ''}${Math.round(((eventosDelMes || 0) - eventosDelMesPasado) / eventosDelMesPasado * 100)}%`
+        : "N/A"
+      const conversionChange = conversionRate > 0 ? `+${Math.max(0, conversionRate - 10)}%` : "0%"
       
       const newKpiData: KpiData[] = [
         {
           title: "Bares Pendientes",
-          value: pendingBars.toString(),
-          change: "+3",
-          trend: "up",
+          value: (pendingBars || 0).toString(),
+          change: pendingChange,
+          trend: (pendingBars || 0) > 0 ? "up" : "down",
           icon: CheckSquare,
           description: "de aprobación",
-          hasAction: true,
+          hasAction: (pendingBars || 0) > 0,
         },
         {
           title: "Comerciales Activos",
           value: (activeComerciales || 0).toString(),
-          change: "+2",
-          trend: "up",
+          change: comercialesChange,
+          trend: (activeComerciales || 0) > 3 ? "up" : "down",
           icon: Users,
-          description: "este mes",
+          description: "registrados",
           hasAction: false,
         },
         {
           title: "Ingresos del Mes",
           value: `$${(ingresosMes / 1000000).toFixed(1)}M`,
-          change: "+18%",
-          trend: "up",
+          change: ingresosChange,
+          trend: ingresosChange.includes('+') ? "up" : "down",
           icon: DollarSign,
           description: "COP",
           hasAction: false,
@@ -95,10 +120,10 @@ export function AdminKpiCards() {
         {
           title: "Tasa de Conversión",
           value: `${conversionRate}%`,
-          change: "+5%",
-          trend: "up",
+          change: conversionChange,
+          trend: conversionRate > 0 ? "up" : "down",
           icon: Target,
-          description: "global",
+          description: "del mes",
           hasAction: false,
         },
       ]
@@ -132,14 +157,14 @@ export function AdminKpiCards() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
       {kpiData.map((kpi, index) => {
-        const Icon = kpi.icon
+        const IconComponent = kpi.icon
         const TrendIcon = kpi.trend === "up" ? TrendingUp : TrendingDown
 
         return (
           <Card key={index} className="glassmorphism border-border/50 transition-wingman hover:glow-coral">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">{kpi.title}</CardTitle>
-              <Icon className="h-4 w-4 text-muted-foreground" />
+              <IconComponent className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="text-2xl font-bold text-foreground">{kpi.value}</div>

@@ -125,17 +125,58 @@ export default function ComercialesPage() {
         return
       }
 
-      const comercialesWithStats = data?.map(comercial => ({
-        id: comercial.id,
-        nombre: comercial.nombre,
-        email: comercial.email,
-        telefono: comercial.telefono,
-        estado: comercial.activo ? "Activo" : "Inactivo",
-        fechaIngreso: comercial.created_at,
-        baresAsignados: Math.floor(Math.random() * 20) + 5,
-        comisionesEstesMes: Math.floor(Math.random() * 3000000) + 500000,
-        conversionRate: Math.floor(Math.random() * 40) + 50,
-      })) || []
+      // Obtener estadísticas reales para cada comercial
+      const comercialesWithStats = await Promise.all(
+        (data || []).map(async (comercial) => {
+          // Contar bares asignados
+          const { count: baresCount } = await supabase
+            .from('bars')
+            .select('*', { count: 'exact', head: true })
+            .eq('comercial_id', comercial.id)
+          
+          // Calcular comisiones del mes actual
+          const startOfMonth = new Date()
+          startOfMonth.setDate(1)
+          startOfMonth.setHours(0, 0, 0, 0)
+          
+          const { data: comisiones } = await supabase
+            .from('comisiones')
+            .select('monto')
+            .eq('comercial_id', comercial.id)
+            .gte('fecha_causacion', startOfMonth.toISOString())
+          
+          const comisionesEstesMes = comisiones?.reduce((sum, c) => sum + (c.monto || 0), 0) || 0
+          
+          // Calcular tasa de conversión del mes
+          const { count: leadsCount } = await supabase
+            .from('lead')
+            .select('*', { count: 'exact', head: true })
+            .eq('comercial_id', comercial.id)
+            .gte('created_at', startOfMonth.toISOString())
+          
+          const { count: conversionesCount } = await supabase
+            .from('bars')
+            .select('*', { count: 'exact', head: true })
+            .eq('comercial_id', comercial.id)
+            .gte('created_at', startOfMonth.toISOString())
+          
+          const conversionRate = leadsCount && leadsCount > 0 
+            ? Math.round((conversionesCount || 0) / leadsCount * 100)
+            : 0
+          
+          return {
+            id: comercial.id,
+            nombre: comercial.nombre,
+            email: comercial.email,
+            telefono: comercial.telefono,
+            estado: comercial.activo ? "Activo" : "Inactivo",
+            fechaIngreso: comercial.created_at,
+            baresAsignados: baresCount || 0,
+            comisionesEstesMes: comisionesEstesMes,
+            conversionRate: conversionRate,
+          }
+        })
+      )
 
       setComerciales(comercialesWithStats)
       setTotalCount(totalRecords || 0)

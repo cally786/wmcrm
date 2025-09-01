@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__supabase__list_projects",
+      "mcp__windows-logs__get_app_status",
+      "mcp__supabase__execute_sql",
+      "WebSearch",
+      "WebFetch(domain:docs.wompi.co)",
+      "Bash(git add:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "supabase",
+    "browsermcp",
+    "windows-logs"
+  ]
+}

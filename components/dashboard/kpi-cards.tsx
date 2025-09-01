@@ -23,6 +23,30 @@ interface KpiCardsProps {
   data?: KPIData[]
 }
 
+function getNextPayoutDate(): string {
+  const today = new Date()
+  const currentMonth = today.getMonth()
+  const currentYear = today.getFullYear()
+  
+  // Payouts typically happen at the end of the month
+  let payoutMonth = currentMonth
+  let payoutYear = currentYear
+  
+  // If we're past the 25th, next payout is next month
+  if (today.getDate() > 25) {
+    payoutMonth += 1
+    if (payoutMonth > 11) {
+      payoutMonth = 0
+      payoutYear += 1
+    }
+  }
+  
+  const payoutDate = new Date(payoutYear, payoutMonth, 28)
+  const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+  
+  return `${payoutDate.getDate()} ${months[payoutDate.getMonth()]}`
+}
+
 export function KpiCards({ data }: KpiCardsProps) {
   const [kpiData, setKpiData] = useState<KPIData[]>(data || [])
   const [loading, setLoading] = useState(!data)
@@ -131,38 +155,40 @@ export function KpiCards({ data }: KpiCardsProps) {
 
       const pendingTotal = pendingCommissions?.reduce((sum, comm) => sum + Number(comm.monto_neto), 0) || 0
 
+      const nextPayoutDate = pendingTotal > 0 ? getNextPayoutDate() : "Sin pagos"
+      
       const newKpiData: KPIData[] = [
         {
           title: "Total Leads",
           value: (totalLeads || 0).toString(),
-          change: "+12%",
-          trend: "up" as const,
+          change: "",
+          trend: "neutral",
           icon: Users,
-          description: "en pipeline",
+          description: "registrados",
         },
         {
           title: "Suscripciones Activas", 
           value: (activeSubs || 0).toString(),
-          change: "+8%",
-          trend: "up" as const,
+          change: "",
+          trend: "neutral",
           icon: Target,
           description: "clientes activos",
         },
         {
           title: "Comisiones Este Mes",
           value: `$${monthlyTotal.toLocaleString()}`,
-          change: `Total: $${monthlyTotalCausado.toLocaleString()}`,
-          trend: "neutral" as const,
+          change: "",
+          trend: "neutral",
           icon: DollarSign,
-          description: "pagadas de total",
+          description: "pagadas",
         },
         {
           title: "Próximo Payout",
-          value: "26 Ago",
-          change: `$${pendingTotal.toLocaleString()}`,
-          trend: "neutral" as const,
+          value: nextPayoutDate,
+          change: pendingTotal > 0 ? `$${pendingTotal.toLocaleString()}` : "",
+          trend: "neutral",
           icon: Calendar,
-          description: "estimado",
+          description: "pendiente",
         },
       ]
 
@@ -195,14 +221,14 @@ export function KpiCards({ data }: KpiCardsProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
       {kpiData.map((kpi, index) => {
-        const Icon = kpi.icon
+        const IconComponent = kpi.icon
         const TrendIcon = kpi.trend === "up" ? TrendingUp : kpi.trend === "down" ? TrendingDown : null
 
         return (
           <Card key={index} className="glassmorphism border-border/50 transition-wingman hover:glow-coral">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">{kpi.title}</CardTitle>
-              <Icon className="h-4 w-4 text-muted-foreground" />
+              <IconComponent className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-foreground">{kpi.value}</div>

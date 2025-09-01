@@ -18,7 +18,7 @@ export interface Bar {
   channel: "A" | "B"
   registrationDate: string
   approved: boolean
-  status: "prospecto" | "contactado" | "demo-programado" | "activa"
+  status: "prospecto" | "demo-programado" | "activa"
   contact?: string
   demoDate?: string
 }
@@ -28,12 +28,6 @@ const columns = [
     id: "prospecto",
     title: "Prospecto",
     badgeColor: "bg-muted-foreground text-white",
-    count: 0,
-  },
-  {
-    id: "contactado",
-    title: "Contactado",
-    badgeColor: "bg-info text-white",
     count: 0,
   },
   {
@@ -90,9 +84,7 @@ export function PipelineKanban() {
 
         console.log('Pipeline: Using comercial ID:', comercialId)
       } else {
-        // No user authenticated - use demo data
-        console.warn('Pipeline: No user authenticated - using demo comercial Juan Pérez')
-        comercialId = '8db6ca40-993d-4305-add9-51c6b81df16e'
+        console.warn('Pipeline: No user authenticated')
       }
 
       if (!comercialId) {
@@ -125,10 +117,8 @@ export function PipelineKanban() {
           // Map pipeline statuses
           switch (lead.etapa) {
             case 'PROSPECTO':
+            case 'CONTACTADO': // Treat contactado as prospecto since it's redundant
               status = 'prospecto'
-              break
-            case 'CONTACTADO':
-              status = 'contactado'
               break
             case 'DEMO_PROG':
             case 'DEMO_REAL':
@@ -174,12 +164,64 @@ export function PipelineKanban() {
     setDraggedBar(null)
   }
 
-  const handleDrop = (columnId: string) => {
+  const handleDrop = async (columnId: string) => {
     if (!draggedBar) return
 
+    // Restrict dropping to "Suscripción Activa" - requires payment processing, not manual move
+    if (columnId === 'activa') {
+      console.warn('No se puede mover manualmente a Suscripción Activa - requiere pago procesado')
+      setDraggedBar(null)
+      return
+    }
+
+    const originalStatus = draggedBar.status
+    
+    // Update UI optimistically
     setBars((prevBars) =>
       prevBars.map((bar) => (bar.id === draggedBar.id ? { ...bar, status: columnId as Bar["status"] } : bar)),
     )
+    
+    try {
+      // Map frontend status to database etapa
+      let newEtapa = 'PROSPECTO'
+      switch (columnId) {
+        case 'prospecto':
+          newEtapa = 'PROSPECTO'
+          break
+        case 'demo-programado':
+          newEtapa = 'DEMO_PROG'
+          break
+        case 'activa':
+          newEtapa = 'ACTIVO' // This won't be reached due to restriction above
+          break
+      }
+      
+      // Update in database
+      const { error } = await supabase
+        .from('lead')
+        .update({ 
+          etapa: newEtapa,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', draggedBar.id)
+
+      if (error) {
+        console.error('Error updating lead status:', error)
+        // Revert UI change on error
+        setBars((prevBars) =>
+          prevBars.map((bar) => (bar.id === draggedBar.id ? { ...bar, status: originalStatus } : bar)),
+        )
+      } else {
+        console.log(`Lead ${draggedBar.id} moved to ${newEtapa}`)
+      }
+    } catch (error) {
+      console.error('Error updating lead status:', error)
+      // Revert UI change on error
+      setBars((prevBars) =>
+        prevBars.map((bar) => (bar.id === draggedBar.id ? { ...bar, status: originalStatus } : bar)),
+      )
+    }
+    
     setDraggedBar(null)
   }
 
@@ -207,6 +249,7 @@ export function PipelineKanban() {
               count={0}
               onDrop={() => {}}
               isDragOver={false}
+              isDropDisabled={column.id === 'activa'}
             >
               <div className="space-y-4">
                 {[...Array(2)].map((_, index) => (
@@ -236,6 +279,7 @@ export function PipelineKanban() {
             count={column.count}
             onDrop={handleDrop}
             isDragOver={draggedBar?.status !== column.id}
+            isDropDisabled={column.id === 'activa'}
           >
             <div className="space-y-4">
               {getBarsByStatus(column.id).map((bar) => (
@@ -245,6 +289,7 @@ export function PipelineKanban() {
                   onDragStart={handleDragStart}
                   onDragEnd={handleDragEnd}
                   isDragging={draggedBar?.id === bar.id}
+                  onBarUpdated={fetchPipelineData}
                 />
               ))}
             </div>

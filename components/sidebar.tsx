@@ -26,12 +26,12 @@ import {
 
 const commercialNavigation = [
   {
-    title: "Dashboard",
+    title: "Inicio",
     href: "/comercial/dashboard",
     icon: Home,
   },
   {
-    title: "Pipeline",
+    title: "Embudo",
     href: "/comercial/pipeline",
     icon: BarChart3,
   },
@@ -56,20 +56,15 @@ const commercialNavigation = [
     icon: FileBarChart,
   },
   {
-    title: "Payouts",
+    title: "Pagos",
     href: "/comercial/payouts",
     icon: CreditCard,
   },
-  {
-    title: "Configuración",
-    href: "/comercial/configuracion",
-    icon: Settings,
-  },
 ]
 
-const adminNavigation = [
+const getAdminNavigation = (pendingCount: number) => [
   {
-    title: "Dashboard",
+    title: "Inicio",
     href: "/admin/dashboard",
     icon: Home,
   },
@@ -77,7 +72,7 @@ const adminNavigation = [
     title: "Aprobaciones",
     href: "/admin/aprobaciones",
     icon: CheckSquare,
-    badge: 12,
+    badge: pendingCount > 0 ? pendingCount : undefined,
   },
   {
     title: "Comerciales",
@@ -90,7 +85,7 @@ const adminNavigation = [
     icon: TrendingUp,
   },
   {
-    title: "Payouts",
+    title: "Pagos",
     href: "/admin/payouts",
     icon: CreditCard,
   },
@@ -114,16 +109,35 @@ interface SidebarProps {
 export function Sidebar({ className, userRole }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
   const [userInfo, setUserInfo] = useState<{ name: string; initials: string } | null>(null)
+  const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0)
   const pathname = usePathname()
 
   // Determine if we're in admin or commercial section
   // Use userRole prop if provided, otherwise detect from pathname
   const isAdmin = userRole ? userRole === "admin" : pathname.startsWith("/admin")
-  const navigationItems = isAdmin ? adminNavigation : commercialNavigation
+  const navigationItems = isAdmin ? getAdminNavigation(pendingApprovalsCount) : commercialNavigation
 
   useEffect(() => {
     fetchUserInfo()
-  }, [])
+    if (isAdmin) {
+      fetchPendingApprovalsCount()
+    }
+  }, [isAdmin])
+
+  async function fetchPendingApprovalsCount() {
+    try {
+      const { count, error } = await supabase
+        .from('bars')
+        .select('*', { count: 'exact', head: true })
+        .eq('account_status', 'pending_verification')
+      
+      if (!error) {
+        setPendingApprovalsCount(count || 0)
+      }
+    } catch (error) {
+      console.error('Error fetching pending approvals count:', error)
+    }
+  }
 
   async function fetchUserInfo() {
     try {

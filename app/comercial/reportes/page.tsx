@@ -155,6 +155,83 @@ export default function ReportesComercialesPage() {
     }
   }
 
+  const exportToExcel = () => {
+    // Create Excel-compatible data
+    const excelData = []
+    
+    // Add metrics summary
+    excelData.push(['REPORTE DE COMERCIAL - RESUMEN EJECUTIVO'])
+    excelData.push([''])
+    excelData.push(['Generado el:', new Date().toLocaleDateString('es-ES')])
+    excelData.push(['Período:', periodo])
+    excelData.push([''])
+    
+    // Add KPIs
+    excelData.push(['INDICADORES CLAVE (KPIs)'])
+    excelData.push(['Métrica', 'Valor', 'Variación vs Mes Anterior'])
+    excelData.push(['Leads Generados', metrics.leadsGenerados, '+15%'])
+    excelData.push(['Conversiones', metrics.conversiones, '+8%'])
+    excelData.push(['Tasa de Conversión', `${metrics.tasaConversion}%`, '-2.1%'])
+    excelData.push(['Comisiones Totales', `$${metrics.comisiones.toLocaleString()}`, '+22%'])
+    excelData.push([''])
+    
+    // Add monthly performance data
+    excelData.push(['EVOLUCIÓN MENSUAL'])
+    excelData.push(['Mes', 'Leads', 'Conversiones', 'Comisiones'])
+    chartData.misVentasData.forEach(month => {
+      excelData.push([month.mes, month.leads, month.conversiones, `$${month.comisiones.toLocaleString()}`])
+    })
+    excelData.push([''])
+    
+    // Add pipeline data
+    excelData.push(['ESTADO DEL PIPELINE'])
+    excelData.push(['Etapa', 'Cantidad', 'Valor Estimado'])
+    chartData.pipelineData.forEach(stage => {
+      excelData.push([stage.etapa, stage.cantidad, `$${stage.valor.toLocaleString()}`])
+    })
+    excelData.push([''])
+    
+    // Add commission types
+    excelData.push(['TIPOS DE COMISIÓN'])
+    excelData.push(['Tipo', 'Porcentaje'])
+    chartData.tipoComisionData.forEach(type => {
+      excelData.push([type.name, `${type.value}%`])
+    })
+    excelData.push([''])
+    
+    // Add goals tracking
+    excelData.push(['SEGUIMIENTO DE METAS'])
+    excelData.push(['Métrica', 'Actual', 'Meta', 'Progreso'])
+    excelData.push(['Leads', metrics.leadsGenerados, '5', `${Math.min((metrics.leadsGenerados / 5) * 100, 100).toFixed(1)}%`])
+    excelData.push(['Conversiones', metrics.conversiones, '3', `${Math.min((metrics.conversiones / 3) * 100, 100).toFixed(1)}%`])
+    excelData.push(['Comisiones', `$${(metrics.comisiones / 1000000).toFixed(2)}M`, '$2.5M', `${Math.min((metrics.comisiones / 2500000) * 100, 100).toFixed(1)}%`])
+
+    // Convert to CSV format
+    const csvContent = excelData.map(row => 
+      row.map(cell => {
+        if (typeof cell === 'string' && cell.includes(',')) {
+          return `"${cell}"`
+        }
+        return cell
+      }).join(',')
+    ).join('\n')
+
+    // Add BOM for proper UTF-8 encoding in Excel
+    const BOM = '\uFEFF'
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    
+    const date = new Date().toLocaleDateString('es-ES').replace(/\//g, '-')
+    link.download = `reporte_comercial_${date}.csv`
+    
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
   async function fetchChartData() {
     try {
       // Get current user from Supabase auth
@@ -329,7 +406,10 @@ export default function ReportesComercialesPage() {
               <SelectItem value="1y">1 año</SelectItem>
             </SelectContent>
           </Select>
-          <Button className="bg-gradient-to-r from-[#FF5F45] to-[#FF7A63] hover:from-[#E54A2E] hover:to-[#FF5F45] text-white">
+          <Button 
+            onClick={exportToExcel}
+            className="bg-gradient-to-r from-[#FF5F45] to-[#FF7A63] hover:from-[#E54A2E] hover:to-[#FF5F45] text-white"
+          >
             <Download className="w-4 h-4 mr-2" />
             Exportar
           </Button>

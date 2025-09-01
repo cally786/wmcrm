@@ -28,33 +28,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-const ventasData = [
-  { mes: "Ene", ventas: 45, comisiones: 2100000, conversion: 65 },
-  { mes: "Feb", ventas: 52, comisiones: 2450000, conversion: 68 },
-  { mes: "Mar", ventas: 48, comisiones: 2280000, conversion: 62 },
-  { mes: "Apr", ventas: 61, comisiones: 2890000, conversion: 71 },
-  { mes: "May", ventas: 55, comisiones: 2650000, conversion: 69 },
-  { mes: "Jun", ventas: 67, comisiones: 3200000, conversion: 74 },
-]
-
-const comercialesData = [
-  { nombre: "Carlos M.", ventas: 28, comisiones: 1450000 },
-  { nombre: "Ana G.", ventas: 24, comisiones: 1280000 },
-  { nombre: "Miguel T.", ventas: 18, comisiones: 920000 },
-  { nombre: "Sofia R.", ventas: 22, comisiones: 1150000 },
-]
-
-const canalData = [
-  { name: "Canal A", value: 65, color: "#FF5F45" },
-  { name: "Canal B", value: 35, color: "#4A9EFF" },
-]
-
-const regionData = [
-  { region: "Bogotá", bares: 45, ingresos: 12500000 },
-  { region: "Medellín", bares: 32, ingresos: 8900000 },
-  { region: "Cali", bares: 28, ingresos: 7800000 },
-  { region: "Barranquilla", bares: 18, ingresos: 5200000 },
-]
+// All data is now fetched from database - no mock data
 
 export default function ReportesAdminPage() {
   const [periodo, setPeriodo] = useState("6m")
@@ -144,9 +118,29 @@ export default function ReportesAdminPage() {
 
   async function fetchChartData() {
     try {
+      // Calculate date range based on periodo for comerciales data
+      const now = new Date()
+      const startDate = new Date()
+      
+      switch(periodo) {
+        case "1m":
+          startDate.setMonth(now.getMonth() - 1)
+          break
+        case "3m":
+          startDate.setMonth(now.getMonth() - 3)
+          break
+        case "6m":
+          startDate.setMonth(now.getMonth() - 6)
+          break
+        case "1y":
+          startDate.setFullYear(now.getFullYear() - 1)
+          break
+        default:
+          startDate.setMonth(now.getMonth() - 6)
+      }
+      
       // Generate monthly data for the last 6 months
       const monthlyData = []
-      const now = new Date()
       const monthNames = ["Ene", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
       
       for (let i = 5; i >= 0; i--) {
@@ -181,7 +175,7 @@ export default function ReportesAdminPage() {
       // Get comerciales data for chart
       const { data: comercialesData, error: comercialesError } = await supabase
         .from('comercial')
-        .select('nombre')
+        .select('id, nombre')
         .eq('activo', true)
 
       // Get bars by location for region data  
@@ -194,12 +188,32 @@ export default function ReportesAdminPage() {
         return
       }
 
-      // Process comerciales data
-      const comercialesChartData = comercialesData?.map((comercial, index) => ({
-        nombre: comercial.nombre.split(' ').slice(0, 2).join(' ').substring(0, 10) + '.',
-        ventas: Math.floor(Math.random() * 30) + 10, // TODO: Get real sales data
-        comisiones: Math.floor(Math.random() * 2000000) + 800000 // TODO: Get real commission data
-      })) || []
+      // Process comerciales data with real metrics
+      const comercialesChartData = await Promise.all(
+        (comercialesData || []).map(async (comercial) => {
+          // Get real events count for this comercial
+          const { data: comercialEvents } = await supabase
+            .from('evento')
+            .select('*', { count: 'exact' })
+            .eq('comercial_id', comercial.id)
+            .gte('created_at', startDate.toISOString())
+          
+          // Get real commissions for this comercial  
+          const { data: comercialCommissions } = await supabase
+            .from('comision')
+            .select('monto')
+            .eq('comercial_id', comercial.id)
+            .gte('fecha_causacion', startDate.toISOString())
+          
+          const totalCommissions = comercialCommissions?.reduce((sum, c) => sum + (c.monto || 0), 0) || 0
+          
+          return {
+            nombre: comercial.nombre.split(' ').slice(0, 2).join(' ').substring(0, 10) + '.',
+            ventas: comercialEvents?.length || 0,
+            comisiones: totalCommissions
+          }
+        })
+      )
 
       // Process region data from bars
       const regionCounts = {}
@@ -223,9 +237,8 @@ export default function ReportesAdminPage() {
         ventasData: monthlyData,
         comercialesData: comercialesChartData,
         canalData: [
-          { name: "Directo", value: 70, color: "#FF5F45" },
-          { name: "Referido", value: 30, color: "#4A9EFF" },
-        ], // TODO: Get real channel data
+          { name: "Sin datos", value: 100, color: "#FF5F45" },
+        ],
         regionData: regionChartData.length > 0 ? regionChartData : [
           { region: "Sin datos", bares: 0, ingresos: 0 }
         ]
@@ -274,9 +287,9 @@ export default function ReportesAdminPage() {
               <div>
                 <p className="text-gray-400 text-sm">Ventas Totales</p>
                 <p className="text-2xl font-bold text-white">{loading ? "..." : metrics.totalVentas}</p>
-                <p className="text-xs text-[#00D4AA] flex items-center mt-1">
+                <p className="text-xs text-gray-400 flex items-center mt-1">
                   <TrendingUp className="w-3 h-3 mr-1" />
-                  +12% vs mes anterior
+                  Eventos totales
                 </p>
               </div>
               <Target className="w-8 h-8 text-[#FF5F45]" />
@@ -292,9 +305,9 @@ export default function ReportesAdminPage() {
                 <p className="text-2xl font-bold text-white">
                   {loading ? "..." : `$${(metrics.ingresosTotal / 1000000).toFixed(1)}M`}
                 </p>
-                <p className="text-xs text-[#00D4AA] flex items-center mt-1">
+                <p className="text-xs text-gray-400 flex items-center mt-1">
                   <TrendingUp className="w-3 h-3 mr-1" />
-                  +8% vs mes anterior
+                  Ingresos estimados
                 </p>
               </div>
               <DollarSign className="w-8 h-8 text-[#00D4AA]" />
@@ -310,9 +323,9 @@ export default function ReportesAdminPage() {
                 <p className="text-2xl font-bold text-white">
                   {loading ? "..." : `${metrics.tasaConversion}%`}
                 </p>
-                <p className="text-xs text-[#00D4AA] flex items-center mt-1">
+                <p className="text-xs text-gray-400 flex items-center mt-1">
                   <TrendingUp className="w-3 h-3 mr-1" />
-                  +3.2% vs mes anterior
+                  Tasa calculada
                 </p>
               </div>
               <TrendingUp className="w-8 h-8 text-[#4A9EFF]" />
@@ -326,9 +339,9 @@ export default function ReportesAdminPage() {
               <div>
                 <p className="text-gray-400 text-sm">Bares Activos</p>
                 <p className="text-2xl font-bold text-white">{loading ? "..." : metrics.baresActivos}</p>
-                <p className="text-xs text-[#00D4AA] flex items-center mt-1">
+                <p className="text-xs text-gray-400 flex items-center mt-1">
                   <TrendingUp className="w-3 h-3 mr-1" />
-                  +15 este mes
+                  Total registrados
                 </p>
               </div>
               <Users className="w-8 h-8 text-[#FFB800]" />

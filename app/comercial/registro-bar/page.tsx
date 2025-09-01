@@ -15,6 +15,12 @@ import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { SidebarOverlay } from "@/components/sidebar-overlay"
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 const steps = [
   { id: 1, title: "Info Básica", icon: Building },
@@ -29,6 +35,7 @@ export default function RegistroBarPage() {
   const [metodoEnganche, setMetodoEnganche] = useState("evento")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitMessage, setSubmitMessage] = useState("")
+  const [nitValidation, setNitValidation] = useState({ isChecking: false, message: "", isValid: true })
   
   console.log("📄 RegistroBarPage: Component rendering...")
   
@@ -67,9 +74,56 @@ export default function RegistroBarPage() {
 
   const handleInputChange = (field: string, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
+    
+    // Validate NIT when it changes
+    if (field === 'nit' && value && value.length > 5) {
+      validateNIT(value)
+    } else if (field === 'nit') {
+      setNitValidation({ isChecking: false, message: "", isValid: true })
+    }
+  }
+
+  const validateNIT = async (nit: string) => {
+    if (!nit || nit.length < 6) return
+    
+    setNitValidation({ isChecking: true, message: "Verificando NIT...", isValid: true })
+    
+    try {
+      const response = await fetch('/api/validate-nit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nit })
+      })
+      
+      const result = await response.json()
+      
+      if (result.exists) {
+        const baseNit = nit.split('-')[0].trim()
+        setNitValidation({
+          isChecking: false,
+          message: `⚠️ El NIT base ${baseNit} ya está registrado para "${result.barName}" ${result.existingNit ? `(NIT completo: ${result.existingNit})` : ''}. ${result.contacto ? `Contacto: ${result.contacto}` : ''}`,
+          isValid: false
+        })
+      } else {
+        setNitValidation({
+          isChecking: false,
+          message: "✅ NIT disponible",
+          isValid: true
+        })
+      }
+    } catch (error) {
+      console.error('Error validating NIT:', error)
+      setNitValidation({ isChecking: false, message: "", isValid: true })
+    }
   }
 
   const nextStep = () => {
+    // Validate step 1 - check if NIT is valid
+    if (currentStep === 1 && !nitValidation.isValid) {
+      alert('Por favor corrige el NIT antes de continuar')
+      return
+    }
+    
     if (currentStep < 4) setCurrentStep(currentStep + 1)
   }
 
@@ -78,10 +132,25 @@ export default function RegistroBarPage() {
   }
 
   const handleSubmit = async () => {
+    // Final validation - check if NIT is valid
+    if (!nitValidation.isValid) {
+      alert('No se puede registrar el bar: NIT ya está registrado en la plataforma')
+      return
+    }
+    
     setIsSubmitting(true)
     setSubmitMessage("")
     
     try {
+      // Get current session token
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      console.log("📋 Session info:", { 
+        hasSession: !!session, 
+        hasToken: !!session?.access_token,
+        userEmail: session?.user?.email 
+      })
+      
       // Prepare form data with current date selection
       const submitData = {
         ...formData,
@@ -90,11 +159,21 @@ export default function RegistroBarPage() {
       
       console.log("Formulario enviado:", submitData)
       
+      const headers = {
+        'Content-Type': 'application/json',
+      } as any
+      
+      // Add Authorization header if we have a session
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`
+        console.log("✅ Authorization header added")
+      } else {
+        console.log("⚠️ No session token available")
+      }
+      
       const response = await fetch('/api/registro-bar', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify(submitData)
       })
       
@@ -223,13 +302,29 @@ export default function RegistroBarPage() {
                     <Label htmlFor="nit" className="text-white">
                       NIT *
                     </Label>
-                    <Input
-                      id="nit"
-                      value={formData.nit}
-                      onChange={(e) => handleInputChange("nit", e.target.value)}
-                      className="bg-[#353535] border-gray-600 text-white"
-                      placeholder="123456789-0"
-                    />
+                    <div className="relative">
+                      <Input
+                        id="nit"
+                        value={formData.nit}
+                        onChange={(e) => handleInputChange("nit", e.target.value)}
+                        className={`bg-[#353535] border-gray-600 text-white ${
+                          !nitValidation.isValid ? 'border-red-500' : nitValidation.isValid && nitValidation.message.includes('✅') ? 'border-green-500' : ''
+                        }`}
+                        placeholder="123456789-0"
+                      />
+                      {nitValidation.isChecking && (
+                        <div className="absolute right-3 top-3">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        </div>
+                      )}
+                    </div>
+                    {nitValidation.message && (
+                      <p className={`text-sm ${
+                        !nitValidation.isValid ? 'text-red-400' : 'text-green-400'
+                      }`}>
+                        {nitValidation.message}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

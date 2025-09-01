@@ -28,10 +28,28 @@ interface HeaderProps {
 export function Header({ title, breadcrumbs }: HeaderProps) {
   const router = useRouter()
   const [userName, setUserName] = useState<string>('Cargando...')
+  const [notificationCount, setNotificationCount] = useState(0)
 
   useEffect(() => {
     fetchUserName()
+    fetchNotificationCount()
   }, [])
+
+  async function fetchNotificationCount() {
+    try {
+      // Count pending approvals as notifications for admin users
+      const { count, error } = await supabase
+        .from('bars')
+        .select('*', { count: 'exact', head: true })
+        .eq('account_status', 'pending_verification')
+      
+      if (!error) {
+        setNotificationCount(count || 0)
+      }
+    } catch (error) {
+      console.error('Error fetching notification count:', error)
+    }
+  }
 
   async function fetchUserName() {
     try {
@@ -113,9 +131,11 @@ export function Header({ title, breadcrumbs }: HeaderProps) {
         {/* Notifications */}
         <Button variant="ghost" size="sm" className="relative">
           <Bell className="h-5 w-5" />
-          <span className="absolute -top-1 -right-1 h-3 w-3 bg-primary rounded-full flex items-center justify-center">
-            <span className="text-xs text-primary-foreground">3</span>
-          </span>
+          {notificationCount > 0 && (
+            <span className="absolute -top-1 -right-1 h-3 w-3 bg-primary rounded-full flex items-center justify-center">
+              <span className="text-xs text-primary-foreground">{notificationCount}</span>
+            </span>
+          )}
         </Button>
 
         {/* Profile Dropdown */}
