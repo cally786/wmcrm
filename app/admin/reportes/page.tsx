@@ -41,10 +41,10 @@ export default function ReportesAdminPage() {
     baresActivos: 0
   })
   const [chartData, setChartData] = useState({
-    ventasData: [],
-    comercialesData: [],
-    canalData: [],
-    regionData: []
+    ventasData: [] as any[],
+    comercialesData: [] as any[],
+    canalData: [] as any[],
+    regionData: [] as any[]
   })
 
   useEffect(() => {
